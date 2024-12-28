@@ -1,0 +1,35 @@
+Content of Dashboard
+
+I. General Layout
+- Side Bar
+- Logo
+- Title: "AMS Dashboard"
+- Choose data period, it will be used to filter data in the database. Default is 1 year.
+- "Dashboard Simpanan" Page
+- "Dashboard Pembiayaan" Page
+- automatically choose color based on logo
+
+II.Content of "Dashboard Simpanan" Page
+
+Top of pages containing key indicators
+- Total DPK (Rp) -> sum of last balance of saving and deposito in database
+- Total Nominal Tabungan (Rp) -> last balance of saving in database
+- Total Nominal Deposito (Rp) -> last balance of deposito in database
+- CASA Ratio (%) -> saving / (saving + deposito)
+
+Main Graph containing funding gathered
+- Bar chart of total nominal of saving and deposito (it can be filtered by branch and product type (but first have to choose viewed by branch or product type), can be viewed by year, month, week, day)
+- Bar chart of the increase of total nominal of saving and deposito (it can be filtered by branch and product type (but first have to choose viewed by branch or product type), can be viewed by year, month, week, day)
+
+Proportion Chart
+- pie chart of total current nominal of saving by product type or branch (choose by radio button)
+- pie chart of total current nominal of deposito by product type or branch (choose by radio button)
+
+Branch Comparison (Table or graph, which is better?)
+- can choose branch vs branch or branch vs total
+- can choose by year, month, week, day
+- can choose by increase nominal or increase percentage of saving
+- can choose by increase nominal or increase percentage of deposito
+
+III.Content of "Dashboard Pembiayaan" Page
+(to be continued)
