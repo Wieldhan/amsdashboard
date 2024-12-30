@@ -39,7 +39,7 @@ deposito_data, saving_data, saving_products, deposito_products, branches = load_
 
 # Sidebar
 with st.sidebar:
-    st.logo("logo.png", size="large")
+    st.image("logo.png", size=300)
     st.title("AMS Dashboard")
     
     # Set fixed end date to June 30, 2021
