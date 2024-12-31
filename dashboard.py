@@ -69,21 +69,36 @@ with st.sidebar:
     time_period = st.selectbox("Satuan Analisis:", ["Hari", "Minggu", "Bulan", "Tahun"], key="overview_period")
     
     # Filter Branch
-    all_branches = deposito_data['KodeCabang'].unique()
-    branch_options = {code: branches.get(code, code) for code in all_branches}
-    selected_items = st.pills(
-        "Filter Cabang:", 
-        options=all_branches,
-        format_func=lambda x: branch_options[x],
-        selection_mode="multi",
-        default=all_branches,
-        key="sidebar_branch_selector"
-    )
-    if not selected_items:  # If no branch is selected
-        st.warning("Please select at least one branch.")
-        st.stop()
-    branch_deposito = deposito_data[deposito_data['KodeCabang'].isin(selected_items)]
-    branch_saving = saving_data[saving_data['KodeCabang'].isin(selected_items)]
+    # Step 1: Extract unique branch codes
+all_branches = deposito_data['KodeCabang'].unique()
+
+# Step 2: Create a mapping of branch codes to their names
+branch_options = {code: branches.get(code, code) for code in all_branches}
+
+# Step 3: Create a multi-selection pill interface for branch selection
+selected_items = st.pills(
+    "Filter Cabang:", 
+    options=all_branches,
+    format_func=lambda x: branch_options[x],
+    selection_mode="multi",
+    default=all_branches.tolist(),  # Ensure default is a list
+    key="sidebar_branch_selector"
+)
+
+# Step 4: Check if any branches are selected
+if not selected_items:  # If no branch is selected
+    st.warning("Please select at least one branch.")
+    st.stop()  # Stop execution if no selection
+
+# Step 5: Filter the data based on selected branches
+branch_deposito = deposito_data[deposito_data['KodeCabang'].isin(selected_items)]
+branch_saving = saving_data[saving_data['KodeCabang'].isin(selected_items)]
+
+# Optional: Display the filtered data (for debugging or user feedback)
+st.write("Filtered Deposito Data:", branch_deposito)
+st.write("Filtered Saving Data:", branch_saving)
+    
+    
 
 # Create tabs (moved outside sidebar)
 funding_tab, lending_tab = st.tabs(["Funding", "Lending"])
