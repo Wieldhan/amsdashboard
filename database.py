@@ -2,8 +2,6 @@ import pandas as pd
 from datetime import datetime
 from sqlalchemy import create_engine, text
 
-from sqlalchemy import create_engine
-
 def create_db_engine():
     server = '10.10.10.105,1344'
     username = 'sa'
