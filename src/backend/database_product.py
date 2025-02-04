@@ -59,3 +59,7 @@ def get_lending_product_mapping():
     except Exception as e:
         print(f"Error fetching lending product mappings: {str(e)}")
         return {}, {} 
+    
+if __name__ == "__main__":
+    print(get_lending_product_mapping())
+    print(get_funding_product_mapping())

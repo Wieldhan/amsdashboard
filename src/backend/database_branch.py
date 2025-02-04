@@ -21,3 +21,7 @@ def get_branch_mapping():
     except Exception as e:
         print(f"Error fetching branch mappings: {str(e)}")
         return {} 
+    
+if __name__ == "__main__":
+    print(get_branch_mapping())
+

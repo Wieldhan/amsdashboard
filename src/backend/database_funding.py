@@ -13,6 +13,8 @@ def create_db_engine():
         f"mssql+pyodbc://{username}:{password}@{server}/{database}?"
         f"driver={driver}&Encrypt=no&TrustServerCertificate=yes"
     )
+    
+    return create_engine(connection_string)
 
 _engine = None
 
