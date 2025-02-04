@@ -7,12 +7,7 @@ from plotly.subplots import make_subplots
 from src.backend.database_funding import get_funding_data
 from src.backend.database_product import get_funding_product_mapping
 from src.backend.database_branch import get_branch_mapping
-
-def calculate_delta_percentage(current, previous):
-    """Calculate percentage change between two values"""
-    if previous == 0:
-        return 0
-    return ((current - previous) / previous) * 100
+from src.component.calculation import calculate_delta_percentage, calculate_ratio
 
 def show_funding_tab():
     """Main function to display the funding dashboard tab"""
@@ -97,13 +92,14 @@ def show_funding_tab():
     total_deposito = int(filtered_deposito.groupby('Tanggal')['Nominal'].sum().iloc[-1] / 1_000_000) if not filtered_deposito.empty else 0
     total_saving = int(filtered_saving.groupby('Tanggal')['Nominal'].sum().iloc[-1] / 1_000_000) if not filtered_saving.empty else 0
     total_dpk = total_deposito + total_saving
-    casa_ratio = (total_saving / total_dpk * 100) if total_dpk != 0 else 0
+    casa_ratio = calculate_ratio(total_saving, total_dpk)
 
     # Get previous values (from start date)
     prev_deposito = int(filtered_deposito.groupby('Tanggal')['Nominal'].sum().iloc[0] / 1_000_000) if not filtered_deposito.empty else 0
     prev_saving = int(filtered_saving.groupby('Tanggal')['Nominal'].sum().iloc[0] / 1_000_000) if not filtered_saving.empty else 0
     prev_dpk = prev_deposito + prev_saving
-    prev_casa = (prev_saving / prev_dpk * 100) if prev_dpk != 0 else 0
+    prev_casa = calculate_ratio(prev_saving, prev_dpk)
+
 
     # Calculate delta percentages
     dpk_delta = calculate_delta_percentage(total_dpk, prev_dpk)

@@ -19,6 +19,7 @@ def create_db_engine():
         f"mssql+pyodbc://{username}:{password}@{server}/{database}?"
         f"driver={driver}&Encrypt=no&TrustServerCertificate=yes"
     )
+    return create_engine(connection_string)
 
 _engine = None
 
@@ -62,9 +63,15 @@ def create_sqlite_financing_tables(suffix):
         JmlPencairan DECIMAL(18,2),
         ByrPokok DECIMAL(18,2),
         Outstanding DECIMAL(18,2),
-        PRIMARY KEY (Tanggal, KodeCabang, KodeProduk, Kolektibilitas)
+        KdStsPemb VARCHAR(2),
+        KodeGrup1 VARCHAR(10),
+        KodeGrup2 VARCHAR(10),
+        KdKolektor VARCHAR(4),
+
+        PRIMARY KEY (Tanggal, KodeCabang, KodeProduk, Kolektibilitas, KdStsPemb, KodeGrup1, KodeGrup2, KdKolektor)
     )
     """
+
     
     with sqlite_engine.connect() as conn:
         conn.execute(text(create_table_query))
@@ -113,6 +120,7 @@ def get_financing_balance_data(start_date, end_date):
                 Koll as Kolektibilitas,
                 JmlPencairan,
                 ByrPokok,
+                KdStsPemb,
                 KodeGrup1,
                 KodeGrup2,
                 KdKolektor,
@@ -137,12 +145,13 @@ def get_financing_balance_data(start_date, end_date):
                 
                 # Group the data
                 grouped_df = df.groupby(
-                    ['Tanggal', 'KodeCabang', 'KodeProduk', 'Kolektibilitas', 'KodeGrup1', 'KodeGrup2', 'KdKolektor']
+                    ['Tanggal', 'KodeCabang', 'KodeProduk', 'Kolektibilitas', 'KdStsPemb', 'KodeGrup1', 'KodeGrup2', 'KdKolektor']
                 ).agg({
                     'JmlPencairan': 'sum',
                     'ByrPokok': 'sum',
                     'Outstanding': 'sum'
                 }).reset_index()
+
                 
                 # Store in SQLite with suffixed table name
                 sqlite_engine = create_sqlite_financing_tables(suffix)
@@ -195,7 +204,7 @@ def create_sqlite_rahn_tables(suffix):
         KodeProduk VARCHAR(50),
         Nominal DECIMAL(18,2),
         Kolektibilitas INT,
-        PRIMARY KEY (Tanggal, KodeCabang, KodeProduk)
+        PRIMARY KEY (Tanggal, KodeCabang, KodeProduk, Kolektibilitas)
     )
     """
     

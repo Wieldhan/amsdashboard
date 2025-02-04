@@ -7,6 +7,8 @@ from plotly.subplots import make_subplots
 from src.backend.database_lending import get_lending_data
 from src.backend.database_product import get_lending_product_mapping
 from src.backend.database_branch import get_branch_mapping
+from src.component.calculation import calculate_delta_percentage, calculate_ratio
+from src.backend.database_group import get_grup1_mapping, get_grup2_mapping
 
 def calculate_delta_percentage(current, previous):
     """Calculate percentage change between two values"""
@@ -119,7 +121,8 @@ def show_lending_tab():
     npf_rahn = end_date_rahn[end_date_rahn['Kolektibilitas'] >= 3]['Nominal'].sum()
     total_outstanding = end_date_financing['Outstanding'].sum() + end_date_rahn['Nominal'].sum()
     total_npf = npf_financing + npf_rahn
-    npf_ratio = (total_npf / total_outstanding * 100) if total_outstanding != 0 else 0
+    npf_ratio = calculate_ratio(total_npf, total_outstanding)
+
 
     # Get previous NPF values (start date)
     start_date_financing = filtered_financing[filtered_financing['Tanggal'] == filtered_financing['Tanggal'].min()]
@@ -129,7 +132,8 @@ def show_lending_tab():
     prev_npf_rahn = start_date_rahn[start_date_rahn['Kolektibilitas'] >= 3]['Nominal'].sum()
     prev_total_outstanding = start_date_financing['Outstanding'].sum() + start_date_rahn['Nominal'].sum()
     prev_total_npf = prev_npf_financing + prev_npf_rahn
-    prev_npf_ratio = (prev_total_npf / prev_total_outstanding * 100) if prev_total_outstanding != 0 else 0
+    prev_npf_ratio = calculate_ratio(prev_total_npf, prev_total_outstanding)
+
 
     # Calculate delta percentages
     lending_delta = calculate_delta_percentage(total_lending, prev_lending)
@@ -526,39 +530,219 @@ def show_lending_tab():
             else:
                 st.info("No products with non-zero values found for the selected criteria.")
 
-    # Analisis Grup & Kolektor Section
+    # Analisis Grup
     with st.container(border=True):
-        st.subheader("Analisis Grup & Kolektor")
+        st.subheader("Proporsi Pembiayaan per Grup")
         
-        # Get unique groups from financing data
-        groups = sorted(filtered_financing['KodeGrup1'].unique().tolist()) if 'KodeGrup1' in filtered_financing.columns else []
+        # Get unique groups from financing data and their mappings, excluding null values
+        groups = sorted(filtered_financing[filtered_financing['KodeGrup1'].notna()]['KodeGrup1'].unique().tolist()) if 'KodeGrup1' in filtered_financing.columns else []
+        groups_mapping = get_grup1_mapping()
         
-        if not groups:
-            st.warning("No group data available in the financing database.")
-        else:
-            # Group selection
-            group_selection = st.selectbox(
-                "Pilih Grup:",
-                options=groups,
-                key="lending_group_selector"
+        if groups:
+            # Calculate group totals for the latest date
+            latest_date = filtered_financing['Tanggal'].max()
+            group_data = filtered_financing[filtered_financing['Tanggal'] == latest_date].groupby('KodeGrup1')['Outstanding'].sum().reset_index()
+            
+            # Sort the data by Outstanding value in descending order and take top 20
+            group_data = group_data.sort_values('Outstanding', ascending=False)
+            group_data_top20 = group_data.head(20)  # Get top 20 groups
+            
+            # Calculate the sum of remaining groups
+            others_sum = group_data.iloc[20:]['Outstanding'].sum() if len(group_data) > 20 else 0
+            
+            # Create bar chart data including "Others"
+            x_values = [groups_mapping.get(code, code) for code in group_data_top20['KodeGrup1']] + ['Others']
+            y_values = list(group_data_top20['Outstanding'] / 1_000_000) + [others_sum / 1_000_000]
+            text_values = [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data_top20['Outstanding']] + [f"Rp {others_sum/1_000_000:,.0f} Juta"]
+            
+            # Create bar chart
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=x_values,
+                y=y_values,
+                text=text_values,
+                textposition='auto',
+                marker_color=['#1f77b4'] * 20 + ['#7f7f7f']  # Different color for "Others"
+            ))
+            
+            fig.update_layout(
+                title='Outstanding per Grup (Top 20 + Others)',
+                xaxis_title='Grup',
+                yaxis_title='Outstanding (Juta)',
+                height=400,
+                showlegend=False
             )
             
-            # Filter collectors based on selected group
-            collectors = sorted(
-                filtered_financing[filtered_financing['Grup'] == group_selection]['Kolektor'].unique().tolist()
-            ) if 'Kolektor' in filtered_financing.columns else []
+            st.plotly_chart(fig, use_container_width=True)
             
-            if collectors:
-                kolektor_selection = st.selectbox(
-                    "Pilih Kolektor:",
-                    options=collectors,
-                    key="lending_collector_selector"
-                )
-            else:
-                st.warning("No collector data available for the selected group.")
+            # Add detailed table (showing all groups)
+            with st.expander("Tampilkan Rincian Data Grup"):
+                detailed_group_data = pd.DataFrame({
+                    'Grup': [groups_mapping.get(code, code) for code in group_data['KodeGrup1']],
+                    'Outstanding': [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data['Outstanding']],
+                    'Persentase': [(val/group_data['Outstanding'].sum() * 100) for val in group_data['Outstanding']]
+                })
+                detailed_group_data['Persentase'] = detailed_group_data['Persentase'].apply(lambda x: f"{x:.2f}%")
+                
+                # Add total row
+                total_row = pd.DataFrame({
+                    'Grup': ['Total Pembiayaan'],
+                    'Outstanding': [f"Rp {group_data['Outstanding'].sum()/1_000_000:,.0f} Juta"],
+                    'Persentase': ['100.00%']
+                })
+                
+                # Concatenate the original dataframe with the total row
+                detailed_group_data = pd.concat([detailed_group_data, total_row], ignore_index=True)
+                
+                st.dataframe(detailed_group_data, hide_index=True, use_container_width=True)
+        else:
+            st.info("Tidak ada data grup yang tersedia untuk periode yang dipilih.")
+            
+        st.markdown("---")
+        
+        st.subheader("Proporsi Pembiayaan per Metode Angsuran")
+        # Get unique groups from financing data and their mappings, excluding null values
+        groups2 = sorted(filtered_financing[filtered_financing['KodeGrup2'].notna()]['KodeGrup2'].unique().tolist()) if 'KodeGrup2' in filtered_financing.columns else []
+        groups_mapping2 = get_grup2_mapping()
+
+        if groups2:
+            # Calculate group totals for the latest date
+            latest_date = filtered_financing['Tanggal'].max()
+            group_data2 = filtered_financing[filtered_financing['Tanggal'] == latest_date].groupby('KodeGrup2')['Outstanding'].sum().reset_index()
+            
+            # Sort the data by Outstanding value in descending order and take top 20
+            group_data2 = group_data2.sort_values('Outstanding', ascending=False)
+            group_data_top20 = group_data2.head(20)  # Get top 20 groups
+            
+            # Calculate the sum of remaining groups
+            others_sum = group_data2.iloc[20:]['Outstanding'].sum() if len(group_data2) > 20 else 0
+            
+            # Create bar chart data including "Others"
+            x_values = [groups_mapping2.get(code, code) for code in group_data_top20['KodeGrup2']] + ['Others']
+            y_values = list(group_data_top20['Outstanding'] / 1_000_000) + [others_sum / 1_000_000]
+
+            text_values = [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data_top20['Outstanding']] + [f"Rp {others_sum/1_000_000:,.0f} Juta"]
+            
+            # Create bar chart
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=x_values,
+                y=y_values,
+                text=text_values,
+                textposition='auto',
+                marker_color=['#1f77b4'] * 20 + ['#7f7f7f']  # Different color for "Others"
+            ))
+            
+            fig.update_layout(
+                title='Outstanding per Grup (Top 20 + Others)',
+                xaxis_title='Grup',
+                yaxis_title='Outstanding (Juta)',
+                height=400,
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Add detailed table (showing all groups)
+            with st.expander("Tampilkan Rincian Data Grup Angsuran"):
+                detailed_group2_data = pd.DataFrame({
+                    'Grup Metode Angsuran': [groups_mapping2.get(code, code) for code in group_data2['KodeGrup2']],
+                    'Outstanding': [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data2['Outstanding']],
+                    'Persentase': [(val/group_data2['Outstanding'].sum() * 100) for val in group_data2['Outstanding']]
+                })
+                detailed_group2_data['Persentase'] = detailed_group2_data['Persentase'].apply(lambda x: f"{x:.2f}%")
+                
+
+                # Add total row
+                total_row = pd.DataFrame({
+                    'Grup Metode Angsuran': ['Total Pembiayaan'],
+                    'Outstanding': [f"Rp {group_data2['Outstanding'].sum()/1_000_000:,.0f} Juta"],
+                    'Persentase': ['100.00%']
+                })
+                
+                # Concatenate the original dataframe with the total row
+                detailed_group2_data = pd.concat([detailed_group2_data, total_row], ignore_index=True)
+                
+                st.dataframe(detailed_group2_data, hide_index=True, use_container_width=True)
+        else:
+            st.info("Tidak ada data grup metode angsuran yang tersedia untuk periode yang dipilih.")
+
+    # Collector Comparison Section
+    with st.container(border=True):
+        st.subheader("Perbandingan Antar Collector")
+        
+        # Get unique collectors from financing data and their mappings, excluding null values
+        collectors = sorted(filtered_financing[filtered_financing['KdKolektor'].notna()]['KdKolektor'].unique().tolist()) if 'KdKolektor' in filtered_financing.columns else []
+        
+        if collectors:
+            # Calculate collector totals for the latest date
+            latest_date = filtered_financing['Tanggal'].max()
+            collector_data = filtered_financing[filtered_financing['Tanggal'] == latest_date].groupby('KdKolektor')['Outstanding'].sum().reset_index()
+            
+            # Sort the data by Outstanding value in descending order and take top 20
+            collector_data = collector_data.sort_values('Outstanding', ascending=False)
+            collector_data_top20 = collector_data.head(20)  # Get top 20 collectors
+            
+            # Calculate the sum of remaining collectors
+            others_sum = collector_data.iloc[20:]['Outstanding'].sum() if len(collector_data) > 20 else 0
+            
+            # Create bar chart data including "Others"
+            x_values = list(collector_data_top20['KdKolektor']) + ['Others']
+            y_values = list(collector_data_top20['Outstanding'] / 1_000_000) + [others_sum / 1_000_000]
+            text_values = [f"Rp {val/1_000_000:,.0f} Juta" for val in collector_data_top20['Outstanding']] + [f"Rp {others_sum/1_000_000:,.0f} Juta"]
+            
+            # Create bar chart
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=x_values,
+                y=y_values,
+                text=text_values,
+                textposition='auto',
+                marker_color=['#1f77b4'] * 20 + ['#7f7f7f']  # Different color for "Others"
+            ))
+            
+            fig.update_layout(
+                title='Outstanding per Kolektor (Top 20 + Others)',
+                xaxis_title='Kolektor',
+                yaxis_title='Outstanding (Juta)',
+                height=400,
+                showlegend=False
+            )
+
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Add detailed table (showing all collectors)
+            with st.expander("Tampilkan Rincian Data Kolektor"):
+                detailed_collector_data = pd.DataFrame({
+                    'Kolektor': collector_data['KdKolektor'],
+                    'Outstanding': [f"Rp {val/1_000_000:,.0f} Juta" for val in collector_data['Outstanding']],
+
+                    'Persentase': [(val/collector_data['Outstanding'].sum() * 100) for val in collector_data['Outstanding']]
+                })
+                detailed_collector_data['Persentase'] = detailed_collector_data['Persentase'].apply(lambda x: f"{x:.2f}%")
+                
+                # Add total row
+                total_row = pd.DataFrame({
+                    'Kolektor': ['Total'],
+                    'Outstanding': [f"Rp {collector_data['Outstanding'].sum()/1_000_000:,.0f} Juta"],
+                    'Persentase': ['100.00%']
+                })
+
+                
+                # Concatenate the original dataframe with the total row
+                detailed_collector_data = pd.concat([detailed_collector_data, total_row], ignore_index=True)
+                
+                st.dataframe(detailed_collector_data, hide_index=True, use_container_width=True)
+        else:
+            st.info("Tidak ada data Kolektor yang tersedia untuk periode yang dipilih.")
 
     # Branch Comparison Section
     with st.container(border=True):
+
         st.subheader("Perbandingan Antar Cabang")
         
         # Branch selection
