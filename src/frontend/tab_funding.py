@@ -142,11 +142,13 @@ def show_funding_tab():
             help="CASA Ratio is the ratio of total savings to total deposits and savings."
         )
 
+    
+    tab1, tab2, tab3 = st.tabs([":material/monitoring: Pertumbuhan DPK", ":material/pie_chart: Proporsi DPK", ":material/compare_arrows: Perbandingan Cabang"])
     # Main Graph Section
-    with st.container(border=True):
+    with tab1:
         # Funding Overview Section
-        st.subheader("Grafik Pertumbuhan DPK")
-        
+        st.subheader(":material/monitoring: Grafik Pertumbuhan DPK")
+
         # Aggregate data based on time period
         if time_period == "Hari":                
             branch_deposito = filtered_deposito.groupby([pd.Grouper(key='Tanggal', freq='D')])['Nominal'].sum().reset_index()
@@ -184,8 +186,8 @@ def show_funding_tab():
         fig.update_layout(
             barmode='stack',
             title=f'Nilai Saldo DPK per {time_period}' + 
-                  (' (Deposito Only)' if not selected_saving_products else '') +
-                  (' (Savings Only)' if not selected_deposito_products else ''),
+                (' (Deposito Only)' if not selected_saving_products else '') +
+                (' (Savings Only)' if not selected_deposito_products else ''),
             yaxis_title='Nominal Amount',
             legend_title='Product Type',
             showlegend=True
@@ -259,10 +261,12 @@ def show_funding_tab():
             use_container_width=True
         )
 
+        
         # Growth Overview Section
         st.markdown("---")  # Add separator
-        st.subheader("Grafik Perubahan DPK")
+        st.subheader(":material/planner_review: Grafik Perubahan DPK")
         
+
         # Create columns for displaying the parameters
         growth_unit = st.radio("Unit:", ("Percentage", "Nominal"))
     
@@ -366,11 +370,12 @@ def show_funding_tab():
             )
 
     # Proportion Charts
-    with st.container(border=True):
-        st.subheader("Grafik Proporsi DPK")
+    with tab2:
+        st.subheader(":material/pie_chart: Grafik Proporsi DPK")
         view_by = st.radio("Tipe Proporsi:", ("Cabang", "Produk"), key="saving_view")
         col1, col2 = st.columns(2)
         with col1:
+
             if view_by == "Cabang":
                 saving_grouped = filtered_saving.groupby('KodeCabang')['Nominal'].sum()
                 saving_grouped.index = saving_grouped.index.map(lambda x: branches.get(x, x))
@@ -469,8 +474,8 @@ def show_funding_tab():
             )
 
     # Branch Comparison
-    with st.container(border=True):
-        st.subheader("Perbandingan Funding Cabang")
+    with tab3:
+        st.subheader(":material/compare_arrows: Perbandingan Funding Cabang")
         col1, col2 = st.columns(2)
         
         # Filter branch options to only show selected branches from sidebar

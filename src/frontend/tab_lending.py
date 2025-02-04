@@ -174,11 +174,13 @@ def show_lending_tab():
             border=1,
             help="Non-Performing Financing Ratio"
         )
+    
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([":material/monitoring: Pertumbuhan Lending", ":material/pie_chart: Proporsi Lending", ":material/group: Proporsi Grup Angsuran", ":material/support_agent: Proporsi Kolektor", ":material/compare_arrows: Perbandingan Cabang"])
 
     # Main Graph Section
-    with st.container(border=True):
-        st.subheader("Grafik Pertumbuhan Lending")
-        
+    with tab1:
+        st.subheader(":material/monitoring: Grafik Pertumbuhan Lending")
+
         # Aggregate data based on time period
         freq_map = {
             "Hari": 'D',
@@ -247,10 +249,11 @@ def show_lending_tab():
         })
         st.dataframe(summary_data, hide_index=True, use_container_width=True)
 
-    # Growth Trend Section
-    with st.container(border=True):
-        st.subheader("Grafik Perubahan Lending")
+        # Growth Trend Section
+        st.markdown("----")
+        st.subheader(":material/planner_review: Grafik Perubahan Lending")
         
+
         # Unit selection - Added unique key
         growth_unit = st.radio(
             "Unit:", 
@@ -356,9 +359,9 @@ def show_lending_tab():
             st.dataframe(formatted_data, hide_index=True, use_container_width=True)
 
     # Lending Proportion Section
-    with st.container(border=True):
-        st.subheader("Proporsi Lending")
-        
+    with tab2:
+        st.subheader(":material/pie_chart: Proporsi Lending")
+
         # Type selection - Added unique key
         proportion_type = st.radio(
             "Tipe Proporsi:", 
@@ -531,9 +534,10 @@ def show_lending_tab():
                 st.info("No products with non-zero values found for the selected criteria.")
 
     # Analisis Grup
-    with st.container(border=True):
-        st.subheader("Proporsi Pembiayaan per Grup")
+    with tab3:
+        st.subheader(":material/group: Proporsi Pembiayaan per Grup")
         
+
         # Get unique groups from financing data and their mappings, excluding null values
         groups = sorted(filtered_financing[filtered_financing['KodeGrup1'].notna()]['KodeGrup1'].unique().tolist()) if 'KodeGrup1' in filtered_financing.columns else []
         groups_mapping = get_grup1_mapping()
@@ -601,7 +605,7 @@ def show_lending_tab():
             
         st.markdown("---")
         
-        st.subheader("Proporsi Pembiayaan per Metode Angsuran")
+        st.subheader(":material/payments: Proporsi Pembiayaan per Metode Angsuran")
         # Get unique groups from financing data and their mappings, excluding null values
         groups2 = sorted(filtered_financing[filtered_financing['KodeGrup2'].notna()]['KodeGrup2'].unique().tolist()) if 'KodeGrup2' in filtered_financing.columns else []
         groups_mapping2 = get_grup2_mapping()
@@ -670,9 +674,10 @@ def show_lending_tab():
             st.info("Tidak ada data grup metode angsuran yang tersedia untuk periode yang dipilih.")
 
     # Collector Comparison Section
-    with st.container(border=True):
-        st.subheader("Perbandingan Antar Collector")
+    with tab4:
+        st.subheader(":material/support_agent: Perbandingan Antar Collector")
         
+
         # Get unique collectors from financing data and their mappings, excluding null values
         collectors = sorted(filtered_financing[filtered_financing['KdKolektor'].notna()]['KdKolektor'].unique().tolist()) if 'KdKolektor' in filtered_financing.columns else []
         
@@ -741,10 +746,11 @@ def show_lending_tab():
             st.info("Tidak ada data Kolektor yang tersedia untuk periode yang dipilih.")
 
     # Branch Comparison Section
-    with st.container(border=True):
+    with tab5:
 
-        st.subheader("Perbandingan Antar Cabang")
+        st.subheader(":material/compare_arrows: Perbandingan Antar Cabang")
         
+
         # Branch selection
         col1, col2 = st.columns(2)
         with col1:

@@ -136,19 +136,20 @@ def main_dashboard():
         if isinstance(tab_access, str):  # Check if it's a string first
             tab_access = tab_access.lower()  # Convert to lowercase for case-insensitive comparison
             if "all" in tab_access or "funding" in tab_access:
-                available_tabs.append("Funding")
+                available_tabs.append(":material/account_balance: Funding")
             if "all" in tab_access or "lending" in tab_access:
-                available_tabs.append("Lending")
+                available_tabs.append(":material/payments: Lending")
         
+
         # Only create tabs if there are available ones
         if available_tabs:
             tabs = st.tabs(available_tabs)
             # Render appropriate content based on selected tab
             for tab, name in zip(tabs, available_tabs):
                 with tab:
-                    if name == "Funding":
+                    if name == ":material/account_balance: Funding":
                         show_funding_tab()
-                    elif name == "Lending":
+                    elif name == ":material/payments: Lending":
                         show_lending_tab()
         else:
             st.warning("You don't have access to any tabs. Please contact your administrator.")
