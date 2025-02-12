@@ -1,6 +1,6 @@
 from sqlalchemy import text
 import streamlit as st
-from backend.database_funding import get_engine
+from src.backend.database_funding import get_engine
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_funding_product_mapping():
