@@ -1,17 +1,16 @@
 from sqlalchemy import text, create_engine
 
 def create_db_engine():
-    server = '10.10.10.105,1344'
+    server = '10.10.10.105:1344'
     username = 'sa'
     password = 'sa'
     database = 'master'
-    driver = 'SQL Server'
+    driver = 'ODBC Driver 17 for SQL Server'
 
     connection_string = (
         f"mssql+pyodbc://{username}:{password}@{server}/{database}?"
-        f"driver={driver}"
+        f"driver={driver}&Encrypt=no&TrustServerCertificate=no"
     )
-    
     return create_engine(connection_string)
 
 _engine = None
