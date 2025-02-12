@@ -1,5 +1,26 @@
-from sqlalchemy import text
-from backend.database_funding import get_engine
+from sqlalchemy import text, create_engine
+
+def create_db_engine():
+    server = '10.10.10.105,1344'
+    username = 'sa'
+    password = 'sa'
+    database = 'master'
+    driver = 'ODBC Driver 17 for SQL Server'
+
+    connection_string = (
+        f"mssql+pyodbc://{username}:{password}@{server}/{database}?"
+        f"driver={driver}&Encrypt=no&TrustServerCertificate=yes"
+    )
+    
+    return create_engine(connection_string)
+
+_engine = None
+
+def get_engine():
+    global _engine
+    if _engine is None:
+        _engine = create_db_engine()
+    return _engine
 
 def check_data_server():
     try:
