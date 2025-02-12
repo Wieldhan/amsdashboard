@@ -5,12 +5,11 @@ def create_db_engine():
     username = 'sa'
     password = 'sa'
     database = 'master'
-    driver = 'ODBC Driver 17 for SQL Server'
+    driver = 'SQL Server'
 
     connection_string = (
         f"mssql+pyodbc://{username}:{password}@{server}/{database}?"
-        f"driver={driver}&TrustServerCertificate=yes&Encrypt=yes&TrustServerCertificate=yes"
-        f"&driver_supports_utf8=yes"
+        f"driver={driver}"
     )
     
     return create_engine(connection_string)
