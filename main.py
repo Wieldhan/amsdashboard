@@ -8,21 +8,20 @@ import pandas as pd
 # Streamlit
 import streamlit as st
 
-# Set page title and layout - MUST BE FIRST STREAMLIT COMMAND
-st.set_page_config(page_title="AMS Dashboard", layout="wide", page_icon="📊")
+# Set page config - MUST BE FIRST STREAMLIT COMMAND
+st.set_page_config(
+    page_title="AMS Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # Import tab modules
 from src.frontend.tab_funding import show_funding_tab
 from src.frontend.tab_lending import show_lending_tab
 from src.backend.database_branch import get_branch_mapping
-from src.backend.user_management import UserManagement
 from src.frontend.login_page import login_page
-from src.frontend.user_management_page import user_management_page
-from src.frontend.data_management_page import data_management_page
 from src.frontend.change_password import change_password_form
-
-# Initialize user management
-user_mgmt = UserManagement()
 
 # Load initial data for global use
 all_branches = get_branch_mapping()
@@ -37,7 +36,6 @@ if 'user_access' not in st.session_state:
     st.session_state.user_access = None
 
 def main_dashboard():
-
     # Sidebar
     with st.sidebar:
         st.image("logo.png", use_container_width=True)
@@ -45,15 +43,6 @@ def main_dashboard():
         
         # User info
         st.write(f"Welcome, {st.session_state.user_id}")
-        
-        # Admin section
-        if st.session_state.user_access["is_admin"]:
-            if st.button("User Management", use_container_width=True):
-                st.session_state.show_user_management = True
-                st.rerun()
-            if st.button("Data Management", use_container_width=True):
-                st.session_state.show_data_management = True
-                st.rerun()
         
         # Date inputs
         current_date = datetime(2021, 6, 30)  # Hardcoded for dummy database
@@ -111,48 +100,30 @@ def main_dashboard():
             st.session_state.user_access = None
             st.rerun()
 
-    # Show user management, data management, change password, or dashboard
-    if st.session_state.get('show_user_management', False):
-        if st.session_state.user_access["is_admin"]:
-            user_management_page(all_branch_codes, all_branches)
-            if st.button("Back to Dashboard"):
-                st.session_state.show_user_management = False
-                st.rerun()
-    elif st.session_state.get('show_data_management', False):
-        if st.session_state.user_access["is_admin"]:
-            data_management_page()
-            if st.button("Back to Dashboard"):
-                st.session_state.show_data_management = False
-                st.rerun()
-    elif st.session_state.get('show_change_password', False):
+    # Show change password or dashboard
+    if st.session_state.get('show_change_password', False):
         change_password_form()
         if st.button("Back to Dashboard"):
             st.session_state.show_change_password = False
             st.rerun()
     else:
-        # Get available tabs based on user access
-        available_tabs = []
-        tab_access = st.session_state.user_access["tab_access"]
-        if isinstance(tab_access, str):  # Check if it's a string first
-            tab_access = tab_access.lower()  # Convert to lowercase for case-insensitive comparison
-            if "all" in tab_access or "funding" in tab_access:
-                available_tabs.append(":material/account_balance: Funding")
-            if "all" in tab_access or "lending" in tab_access:
-                available_tabs.append(":material/payments: Lending")
+        # Main content - Home page
+        st.title("Welcome to AMS Dashboard")
+        st.write("Please select a page from the sidebar to view detailed information.")
         
-
-        # Only create tabs if there are available ones
-        if available_tabs:
-            tabs = st.tabs(available_tabs)
-            # Render appropriate content based on selected tab
-            for tab, name in zip(tabs, available_tabs):
-                with tab:
-                    if name == ":material/account_balance: Funding":
-                        show_funding_tab()
-                    elif name == ":material/payments: Lending":
-                        show_lending_tab()
-        else:
-            st.warning("You don't have access to any tabs. Please contact your administrator.")
+        # Display available pages based on user access
+        st.subheader("Available Pages:")
+        
+        tab_access = st.session_state.user_access["tab_access"].lower()
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if "all" in tab_access or "funding" in tab_access:
+                st.info("💰 **Funding Dashboard**\n\nView detailed funding information including deposits and savings.")
+                
+        with col2:
+            if "all" in tab_access or "lending" in tab_access:
+                st.info("💸 **Lending Dashboard**\n\nAnalyze lending data including financing and rahn information.")
 
 # Main app logic
 if not st.session_state.logged_in:

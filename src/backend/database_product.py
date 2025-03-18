@@ -1,30 +1,29 @@
-from sqlalchemy import text
 import streamlit as st
-from src.backend.database_funding import get_engine
+from src.backend.supabase_client import get_supabase_client
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_funding_product_mapping():
-
+    """Get funding product mappings from Supabase"""
     try:
-        engine = get_engine()
+        supabase = get_supabase_client()
         
-        # Get savings product mapping
-        saving_query = text("""
-            SELECT KodeProduk, NamaProduk 
-            FROM AMSRekening.dbo.RekProdukPR
-        """)
+        # Get deposito products
+        deposito_response = supabase.table('deposito_product_mapping') \
+                                  .select('kode_produk, nama_produk') \
+                                  .execute()
         
-        # Get deposito product mapping
-        deposito_query = text("""
-            SELECT KodeProduk, NamaProduk 
-            FROM AMSDeposito.dbo.DepositoProdukPR
-        """)
+        # Get tabungan products
+        tabungan_response = supabase.table('tabungan_product_mapping') \
+                                  .select('kode_produk, nama_produk') \
+                                  .execute()
         
-        with engine.connect() as conn:
-            saving_products = {row[0]: row[1] for row in conn.execute(saving_query)}
-            deposito_products = {row[0]: row[1] for row in conn.execute(deposito_query)}
-            
-        return deposito_products, saving_products
+        deposito_products = {row['kode_produk']: row['nama_produk'] 
+                           for row in deposito_response.data} if deposito_response.data else {}
+        
+        tabungan_products = {row['kode_produk']: row['nama_produk'] 
+                           for row in tabungan_response.data} if tabungan_response.data else {}
+        
+        return deposito_products, tabungan_products
         
     except Exception as e:
         print(f"Error fetching funding product mappings: {str(e)}")
@@ -32,34 +31,32 @@ def get_funding_product_mapping():
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_lending_product_mapping():
-
+    """Get lending product mappings from Supabase"""
     try:
-        engine = get_engine()
+        supabase = get_supabase_client()
         
-        # Get financing product mapping with UPPER() function
-        financing_query = text("""
-            SELECT KodeProduk, UPPER(NamaProduk) as NamaProduk 
-            FROM AMSPinjaman.dbo.LnProduk
-            WHERE StatusProduk = 1
-        """)
+        # Get pembiayaan products
+        pembiayaan_response = supabase.table('pembiayaan_product_mapping') \
+                                    .select('kode_produk, nama_produk') \
+                                    .execute()
         
-        # Get rahn product mapping with UPPER() function
-        rahn_query = text("""
-            SELECT KdPrdk as KodeProduk, UPPER(NamaProduk) as NamaProduk 
-            FROM AMSRahn.dbo.RAHN_Produk
-            WHERE StsPrdk = 'AKTIF'
-        """)
+        # Get rahn products
+        rahn_response = supabase.table('rahn_product_mapping') \
+                               .select('kode_produk, nama_produk') \
+                               .execute()
         
-        with engine.connect() as conn:
-            financing_products = {row[0]: row[1] for row in conn.execute(financing_query)}
-            rahn_products = {row[0]: row[1] for row in conn.execute(rahn_query)}
-            
-        return financing_products, rahn_products
+        pembiayaan_products = {row['kode_produk']: row['nama_produk'] 
+                             for row in pembiayaan_response.data} if pembiayaan_response.data else {}
+        
+        rahn_products = {row['kode_produk']: row['nama_produk'] 
+                        for row in rahn_response.data} if rahn_response.data else {}
+        
+        return pembiayaan_products, rahn_products
         
     except Exception as e:
         print(f"Error fetching lending product mappings: {str(e)}")
-        return {}, {} 
-    
+        return {}, {}
+
 if __name__ == "__main__":
     print(get_lending_product_mapping())
     print(get_funding_product_mapping())
