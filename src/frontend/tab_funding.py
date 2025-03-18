@@ -11,6 +11,11 @@ from src.component.calculation import calculate_delta_percentage, calculate_rati
 
 def show_funding_tab():
     """Main function to display the funding dashboard tab"""
+    # Ensure session state values are up to date
+    if 'start_date' not in st.session_state or 'end_date' not in st.session_state:
+        st.error("Session state missing date values. Please refresh the page.")
+        return
+        
     # Get data from database with session state dates
     deposito_data, saving_data = get_funding_data(
         start_date=pd.to_datetime(st.session_state.start_date),
@@ -22,84 +27,130 @@ def show_funding_tab():
         st.error("Unable to fetch data from database. Please check your database connection.")
         return
     
-    # Convert Tanggal columns to datetime if they aren't already
-    deposito_data['Tanggal'] = pd.to_datetime(deposito_data['Tanggal'])
-    saving_data['Tanggal'] = pd.to_datetime(saving_data['Tanggal'])
+    # Check if dataframes are empty or don't have required columns
+    if deposito_data.empty or 'Tanggal' not in deposito_data.columns:
+        st.warning("No deposito data available for the selected period")
+        # Create empty dataframe with required columns
+        deposito_data = pd.DataFrame(columns=['Tanggal', 'KodeCabang', 'KodeProduk', 'Nominal'])
+    else:
+        # Convert Tanggal column to datetime
+        deposito_data['Tanggal'] = pd.to_datetime(deposito_data['Tanggal'])
+    
+    if saving_data.empty or 'Tanggal' not in saving_data.columns:
+        st.warning("No saving data available for the selected period")
+        # Create empty dataframe with required columns
+        saving_data = pd.DataFrame(columns=['Tanggal', 'KodeCabang', 'KodeProduk', 'Nominal'])
+    else:
+        # Convert Tanggal column to datetime
+        saving_data['Tanggal'] = pd.to_datetime(saving_data['Tanggal'])
     
     branches = get_branch_mapping()
     deposito_products, saving_products = get_funding_product_mapping()
     
-    # Tab title
+    # Tab title with product information
     st.title("AMS Funding Dashboard")
     
-    # Get values from sidebar
+    # Get values from session state - these are guaranteed to be set by the sidebar
     start_date_input = st.session_state.start_date
     end_date_input = st.session_state.end_date
     selected_items = st.session_state.sidebar_branch_selector
     time_period = st.session_state.overview_period
     
+    # Remember selected products in session state if available
+    default_products = st.session_state.get('funding_product_selector', None)
+    
     # Move product selection here
-    deposito_products_list = deposito_data['KodeProduk'].unique()
-    saving_products_list = saving_data['KodeProduk'].unique()
+    deposito_products_list = [] if deposito_data.empty else deposito_data['KodeProduk'].unique()
+    saving_products_list = [] if saving_data.empty else saving_data['KodeProduk'].unique()
     all_products = np.union1d(deposito_products_list, saving_products_list)
     
+    # Check if we have any products
+    if len(all_products) == 0:
+        st.warning("No products found for the selected period. Please check your data source.")
+        return
+        
     # Combine both product mappings
     product_options = {
-        code: (saving_products.get(code) or deposito_products.get(code) or code) 
+        code: (saving_products.get(code) or deposito_products.get(code) or f"Product {code}") 
         for code in all_products
     }
     
-    selected_products = st.pills(
-        "Filter Produk:", 
+    # Create widget without modifying session state afterward
+    st.subheader("Filter Produk:")
+    product_selection = st.pills(
+        label="", 
         options=all_products,
         format_func=lambda x: product_options[x],
         selection_mode="multi",
-        default=all_products,
+        default=default_products if default_products is not None else all_products,
         key="funding_product_selector"
     )
+    
+    # Get the selection from session state
+    selected_products = st.session_state.funding_product_selector
+    
     if not selected_products:  # If no product is selected
         st.warning("Please select at least one product.")
         st.stop()
-        
+    
     # After the existing product selection code
     selected_saving_products = [p for p in selected_products if p in saving_products_list]
     selected_deposito_products = [p for p in selected_products if p in deposito_products_list]
 
     if deposito_data is not None and saving_data is not None:
         # Filter data based on selected date range
-        mask = (deposito_data['Tanggal'] >= pd.Timestamp(start_date_input)) & \
-            (deposito_data['Tanggal'] <= pd.Timestamp(end_date_input))
-        deposito_data = deposito_data[mask]
+        if not deposito_data.empty:
+            mask = (deposito_data['Tanggal'] >= pd.Timestamp(start_date_input)) & \
+                (deposito_data['Tanggal'] <= pd.Timestamp(end_date_input))
+            deposito_data = deposito_data[mask]
         
-        saving_mask = (saving_data['Tanggal'] >= pd.Timestamp(start_date_input)) & \
-                    (saving_data['Tanggal'] <= pd.Timestamp(end_date_input))
-        saving_data = saving_data[saving_mask]
+        if not saving_data.empty:
+            saving_mask = (saving_data['Tanggal'] >= pd.Timestamp(start_date_input)) & \
+                        (saving_data['Tanggal'] <= pd.Timestamp(end_date_input))
+            saving_data = saving_data[saving_mask]
         
         # Combined Branch and Product filtering
-        filtered_deposito = deposito_data[
-            (deposito_data['KodeCabang'].isin(selected_items)) & 
-            (deposito_data['KodeProduk'].isin(selected_products))
-        ]
-        filtered_saving = saving_data[
-            (saving_data['KodeCabang'].isin(selected_items)) & 
-            (saving_data['KodeProduk'].isin(selected_products))
-        ]
+        if not deposito_data.empty:
+            filtered_deposito = deposito_data[
+                (deposito_data['KodeCabang'].isin(selected_items)) & 
+                (deposito_data['KodeProduk'].isin(selected_products))
+            ]
+        else:
+            filtered_deposito = deposito_data
+            
+        if not saving_data.empty:
+            filtered_saving = saving_data[
+                (saving_data['KodeCabang'].isin(selected_items)) & 
+                (saving_data['KodeProduk'].isin(selected_products))
+            ]
+        else:
+            filtered_saving = saving_data
     else:
         st.error("No data available. Please check the database connection.")
         return
     
     # Calculate key metrics using fully filtered data
-    total_deposito = int(filtered_deposito.groupby('Tanggal')['Nominal'].sum().iloc[-1] / 1_000_000) if not filtered_deposito.empty else 0
-    total_saving = int(filtered_saving.groupby('Tanggal')['Nominal'].sum().iloc[-1] / 1_000_000) if not filtered_saving.empty else 0
+    try:
+        deposito_series = filtered_deposito.groupby('Tanggal')['Nominal'].sum()
+        total_deposito = int(deposito_series.iloc[-1] / 1_000_000) if not deposito_series.empty else 0
+        prev_deposito = int(deposito_series.iloc[0] / 1_000_000) if not deposito_series.empty else 0
+    except (IndexError, KeyError):
+        total_deposito = 0
+        prev_deposito = 0
+    
+    try:
+        saving_series = filtered_saving.groupby('Tanggal')['Nominal'].sum()
+        total_saving = int(saving_series.iloc[-1] / 1_000_000) if not saving_series.empty else 0
+        prev_saving = int(saving_series.iloc[0] / 1_000_000) if not saving_series.empty else 0
+    except (IndexError, KeyError):
+        total_saving = 0
+        prev_saving = 0
+    
+    # Calculate totals and ratios
     total_dpk = total_deposito + total_saving
-    casa_ratio = calculate_ratio(total_saving, total_dpk)
-
-    # Get previous values (from start date)
-    prev_deposito = int(filtered_deposito.groupby('Tanggal')['Nominal'].sum().iloc[0] / 1_000_000) if not filtered_deposito.empty else 0
-    prev_saving = int(filtered_saving.groupby('Tanggal')['Nominal'].sum().iloc[0] / 1_000_000) if not filtered_saving.empty else 0
     prev_dpk = prev_deposito + prev_saving
+    casa_ratio = calculate_ratio(total_saving, total_dpk)
     prev_casa = calculate_ratio(prev_saving, prev_dpk)
-
 
     # Calculate delta percentages
     dpk_delta = calculate_delta_percentage(total_dpk, prev_dpk)
@@ -160,8 +211,8 @@ def show_funding_tab():
             branch_deposito = filtered_deposito.groupby([pd.Grouper(key='Tanggal', freq='M')])['Nominal'].sum().reset_index()
             branch_saving = filtered_saving.groupby([pd.Grouper(key='Tanggal', freq='M')])['Nominal'].sum().reset_index()
         elif time_period == "Tahun":
-            branch_deposito = filtered_deposito.groupby([pd.Grouper(key='Tanggal', freq='Y')])['Nominal'].sum().reset_index()
-            branch_saving = filtered_saving.groupby([pd.Grouper(key='Tanggal', freq='Y')])['Nominal'].sum().reset_index()
+            branch_deposito = filtered_deposito.groupby([pd.Grouper(key='Tanggal', freq='YE')])['Nominal'].sum().reset_index()
+            branch_saving = filtered_saving.groupby([pd.Grouper(key='Tanggal', freq='YE')])['Nominal'].sum().reset_index()
 
         # Create combined stacked bar chart
         fig = go.Figure()
@@ -465,7 +516,7 @@ def show_funding_tab():
             ])
             
             # Format values to millions with thousand separators
-            formatted_final_pivot = final_pivot.applymap(lambda x: f"Rp {x/1_000_000:,.2f} Juta")
+            formatted_final_pivot = final_pivot.map(lambda x: f"Rp {x/1_000_000:,.2f} Juta")
             
             # Display the table
             st.dataframe(
@@ -479,7 +530,7 @@ def show_funding_tab():
         col1, col2 = st.columns(2)
         
         # Filter branch options to only show selected branches from sidebar
-        accessible_branches = {code: branches.get(code, code) for code in selected_items}
+        accessible_branches = {code: branches.get(code, f"Branch {code}") for code in selected_items}
         
         with col1:
             branch1 = st.selectbox(
@@ -577,7 +628,7 @@ def show_funding_tab():
             if branch_data['total_saving'] > 0:
                 saving_labels = []
                 for code in branch_data['saving_by_product'].index:
-                    product_name = saving_products.get(code, code)
+                    product_name = saving_products.get(code, f"Product {code}")
                     saving_labels.append(product_name)
                     
                 fig.add_trace(
@@ -595,7 +646,7 @@ def show_funding_tab():
             if branch_data['total_deposito'] > 0:
                 deposito_labels = []
                 for code in branch_data['deposito_by_product'].index:
-                    product_name = deposito_products.get(code, code)
+                    product_name = deposito_products.get(code, f"Product {code}")
                     deposito_labels.append(product_name)
                     
                 fig.add_trace(
@@ -647,7 +698,7 @@ def show_funding_tab():
         # Add saving products comparison
         all_saving_products = sorted(set(branch1_data['saving_by_product'].index) | set(branch2_data['saving_by_product'].index))
         for product in all_saving_products:
-            product_name = f"Tabungan - {saving_products.get(product, product)}"
+            product_name = f"Tabungan - {saving_products.get(product, f"Product {product}")}"
             awal1, akhir1, selisih1, pertumbuhan1 = get_product_data(filtered_saving[filtered_saving['KodeCabang'] == branch1], product, True)
             awal2, akhir2, selisih2, pertumbuhan2 = get_product_data(filtered_saving[filtered_saving['KodeCabang'] == branch2], product, True)
             
@@ -667,7 +718,7 @@ def show_funding_tab():
         all_deposito_products = sorted(set(branch1_data['deposito_by_product'].index) | set(branch2_data['deposito_by_product'].index))
         
         for product in all_deposito_products:
-            product_name = f"Deposito - {deposito_products.get(product, product)}"
+            product_name = f"Deposito - {deposito_products.get(product, f"Product {product}")}"
             awal1, akhir1, selisih1, pertumbuhan1 = get_product_data(filtered_deposito[filtered_deposito['KodeCabang'] == branch1], product, False)
             awal2, akhir2, selisih2, pertumbuhan2 = get_product_data(filtered_deposito[filtered_deposito['KodeCabang'] == branch2], product, False)
             

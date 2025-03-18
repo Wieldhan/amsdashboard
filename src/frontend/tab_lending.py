@@ -18,6 +18,11 @@ def calculate_delta_percentage(current, previous):
 
 def show_lending_tab():
     """Main function to display the lending dashboard tab"""
+    # Ensure session state values are up to date
+    if 'start_date' not in st.session_state or 'end_date' not in st.session_state:
+        st.error("Session state missing date values. Please refresh the page.")
+        return
+        
     # Get data from database with session state dates
     financing_data, rahn_data = get_lending_data(
         start_date=pd.to_datetime(st.session_state.start_date),
@@ -29,45 +34,79 @@ def show_lending_tab():
         st.error("Unable to fetch data from database. Please check your database connection.")
         return
     
-    # Convert Tanggal columns to datetime
-    financing_data['Tanggal'] = pd.to_datetime(financing_data['Tanggal'])
-    rahn_data['Tanggal'] = pd.to_datetime(rahn_data['Tanggal'])
+    # Check if dataframes are empty or don't have required columns
+    if financing_data.empty or 'Tanggal' not in financing_data.columns:
+        st.warning("No financing data available for the selected period")
+        # Create empty dataframe with required columns
+        financing_data = pd.DataFrame(columns=['Tanggal', 'KodeCabang', 'KodeProduk', 'Kolektibilitas', 
+                                              'JmlPencairan', 'ByrPokok', 'Outstanding', 'KdStsPemb',
+                                              'KodeGrup1', 'KodeGrup2', 'KdKolektor'])
+    else:
+        # Convert Tanggal column to datetime
+        financing_data['Tanggal'] = pd.to_datetime(financing_data['Tanggal'])
     
-    # Add this line to convert Kolektibilitas to numeric
-    financing_data['Kolektibilitas'] = pd.to_numeric(financing_data['Kolektibilitas'], errors='coerce')
-    rahn_data['Kolektibilitas'] = pd.to_numeric(rahn_data['Kolektibilitas'], errors='coerce')
+    if rahn_data.empty or 'Tanggal' not in rahn_data.columns:
+        st.warning("No rahn data available for the selected period")
+        # Create empty dataframe with required columns
+        rahn_data = pd.DataFrame(columns=['Tanggal', 'KodeCabang', 'KodeProduk', 'Nominal', 'Kolektibilitas'])
+    else:
+        # Convert Tanggal column to datetime
+        rahn_data['Tanggal'] = pd.to_datetime(rahn_data['Tanggal'])
+    
+    # Add this line to convert Kolektibilitas to numeric only if columns exist
+    if 'Kolektibilitas' in financing_data.columns:
+        financing_data['Kolektibilitas'] = pd.to_numeric(financing_data['Kolektibilitas'], errors='coerce')
+    if 'Kolektibilitas' in rahn_data.columns:
+        rahn_data['Kolektibilitas'] = pd.to_numeric(rahn_data['Kolektibilitas'], errors='coerce')
 
     branches = get_branch_mapping()
     financing_products, rahn_products = get_lending_product_mapping()
     
-    # Tab title
+    # Tab title with product information
     st.title("AMS Lending Dashboard")
     
-    # Get values from sidebar
+    # Get values from session state - these are guaranteed to be set by the sidebar
     start_date_input = st.session_state.start_date
     end_date_input = st.session_state.end_date
     selected_items = st.session_state.sidebar_branch_selector
     time_period = st.session_state.overview_period
     
+    # Remember selected products in session state if available
+    default_products = st.session_state.get('lending_product_selector', None)
+
+    # Check if we have any data
+    if financing_data.empty and rahn_data.empty:
+        st.info("No lending data available for the selected period and branches. Please check your filters or database connection.")
+        return
+
     # Product selection
-    financing_products_list = financing_data['KodeProduk'].unique()
-    rahn_products_list = rahn_data['KodeProduk'].unique()
+    financing_products_list = [] if financing_data.empty else financing_data['KodeProduk'].unique()
+    rahn_products_list = [] if rahn_data.empty else rahn_data['KodeProduk'].unique()
     all_products = np.union1d(financing_products_list, rahn_products_list)
     
     # Combine both product mappings
     product_options = {
-        code: (financing_products.get(code) or rahn_products.get(code) or code) 
+        code: (financing_products.get(code) or rahn_products.get(code) or f"Product {code}") 
         for code in all_products
     }
     
-    selected_products = st.pills(
-        "Filter Produk:", 
+    if len(all_products) == 0:
+        st.warning("No products found. Please check your data source.")
+        return
+    
+    # Create widget without modifying session state afterward
+    st.subheader("Filter Produk:")
+    st.pills(
+        label="Pilih Produk:", 
         options=all_products,
         format_func=lambda x: product_options[x],
         selection_mode="multi",
-        default=all_products,
+        default=default_products if default_products is not None else all_products,
         key="lending_product_selector"
     )
+    
+    # Get the selection from session state
+    selected_products = st.session_state.lending_product_selector
     
     if not selected_products:
         st.warning("Please select at least one product.")
@@ -186,7 +225,7 @@ def show_lending_tab():
             "Hari": 'D',
             "Minggu": 'W-MON',
             "Bulan": 'M',
-            "Tahun": 'Y'
+            "Tahun": 'YE'
         }
         freq = freq_map.get(time_period, 'D')
         
@@ -342,9 +381,9 @@ def show_lending_tab():
             })
             
             # Calculate growth percentages
-            detailed_data['% Pembiayaan Growth'] = detailed_data['Pembiayaan'].pct_change() * 100
-            detailed_data['% Rahn Growth'] = detailed_data['Rahn'].pct_change() * 100
-            detailed_data['% Total Growth'] = detailed_data['Total'].pct_change() * 100
+            detailed_data['% Pembiayaan Growth'] = detailed_data['Pembiayaan'].pct_change(fill_method=None) * 100
+            detailed_data['% Rahn Growth'] = detailed_data['Rahn'].pct_change(fill_method=None) * 100
+            detailed_data['% Total Growth'] = detailed_data['Total'].pct_change(fill_method=None) * 100
             
             # Format the display
             formatted_data = detailed_data.copy()
@@ -385,7 +424,7 @@ def show_lending_tab():
             if not financing_by_branch.empty:
                 fig.add_trace(
                     go.Pie(
-                        labels=[branches.get(code, code) for code in financing_by_branch.index],
+                        labels=[branches.get(code, f"Branch {code}") for code in financing_by_branch.index],
                         values=financing_by_branch.values,
                         textinfo='percent+label',
                         textposition='inside',
@@ -399,7 +438,7 @@ def show_lending_tab():
             if not rahn_by_branch.empty:
                 fig.add_trace(
                     go.Pie(
-                        labels=[branches.get(code, code) for code in rahn_by_branch.index],
+                        labels=[branches.get(code, f"Branch {code}") for code in rahn_by_branch.index],
                         values=rahn_by_branch.values,
                         textinfo='percent+label',
                         textposition='inside',
@@ -425,7 +464,7 @@ def show_lending_tab():
             if not financing_by_product.empty:
                 fig.add_trace(
                     go.Pie(
-                        labels=[financing_products.get(code, code) for code in financing_by_product.index],
+                        labels=[financing_products.get(code, f"Product {code}") for code in financing_by_product.index],
                         values=financing_by_product.values,
                         textinfo='percent+label',
                         textposition='inside',
@@ -439,7 +478,7 @@ def show_lending_tab():
             if not rahn_by_product.empty:
                 fig.add_trace(
                     go.Pie(
-                        labels=[rahn_products.get(code, code) for code in rahn_by_product.index],
+                        labels=[rahn_products.get(code, f"Product {code}") for code in rahn_by_product.index],
                         values=rahn_by_product.values,
                         textinfo='percent+label',
                         textposition='inside',
@@ -471,7 +510,7 @@ def show_lending_tab():
             
             # Process financing products
             for product in all_financing_products:
-                row_data = {'Product': f"Pembiayaan - {financing_products.get(product, product)}"}
+                row_data = {'Product': f"Pembiayaan - {financing_products.get(product, f'Product {product}')}"}
                 total_product = 0
                 
                 # Calculate per branch values
@@ -490,7 +529,7 @@ def show_lending_tab():
             
             # Process rahn products
             for product in all_rahn_products:
-                row_data = {'Product': f"Rahn - {rahn_products.get(product, product)}"}
+                row_data = {'Product': f"Rahn - {rahn_products.get(product, f'Product {product}')}"}
                 total_product = 0
                 
                 # Calculate per branch values
@@ -512,17 +551,26 @@ def show_lending_tab():
                 summary_df = pd.DataFrame(product_data)
                 
                 # Calculate totals
-                summary_df.loc['Total Pembiayaan'] = ['Total Pembiayaan'] + [
-                    summary_df[col][summary_df['Product'].str.startswith('Pembiayaan')].sum() 
-                    for col in summary_df.columns[1:]
-                ]
-                summary_df.loc['Total Rahn'] = ['Total Rahn'] + [
-                    summary_df[col][summary_df['Product'].str.startswith('Rahn')].sum() 
-                    for col in summary_df.columns[1:]
-                ]
-                summary_df.loc['Total Lending'] = ['Total Lending'] + [
-                    summary_df[col][:-2].sum() for col in summary_df.columns[1:]
-                ]
+                total_pembiayaan_row = {
+                    'Product': 'Total Pembiayaan'
+                }
+                total_rahn_row = {
+                    'Product': 'Total Rahn'
+                }
+                total_lending_row = {
+                    'Product': 'Total Lending'
+                }
+                
+                for col in summary_df.columns[1:]:
+                    total_pembiayaan_row[col] = summary_df[col][summary_df['Product'].str.startswith('Pembiayaan')].sum()
+                    total_rahn_row[col] = summary_df[col][summary_df['Product'].str.startswith('Rahn')].sum()
+                    total_lending_row[col] = summary_df[col].sum()
+                
+                # Add total rows properly
+                summary_df = pd.concat([
+                    summary_df, 
+                    pd.DataFrame([total_pembiayaan_row, total_rahn_row, total_lending_row])
+                ], ignore_index=True)
                 
                 # Format the values
                 for col in summary_df.columns[1:]:
@@ -555,7 +603,7 @@ def show_lending_tab():
             others_sum = group_data.iloc[20:]['Outstanding'].sum() if len(group_data) > 20 else 0
             
             # Create bar chart data including "Others"
-            x_values = [groups_mapping.get(code, code) for code in group_data_top20['KodeGrup1']] + ['Others']
+            x_values = [groups_mapping.get(code, f"Group {code}") for code in group_data_top20['KodeGrup1']] + ['Others']
             y_values = list(group_data_top20['Outstanding'] / 1_000_000) + [others_sum / 1_000_000]
             text_values = [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data_top20['Outstanding']] + [f"Rp {others_sum/1_000_000:,.0f} Juta"]
             
@@ -583,21 +631,24 @@ def show_lending_tab():
             # Add detailed table (showing all groups)
             with st.expander("Tampilkan Rincian Data Grup"):
                 detailed_group_data = pd.DataFrame({
-                    'Grup': [groups_mapping.get(code, code) for code in group_data['KodeGrup1']],
+                    'Grup': [groups_mapping.get(code, f"Group {code}") for code in group_data['KodeGrup1']],
                     'Outstanding': [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data['Outstanding']],
                     'Persentase': [(val/group_data['Outstanding'].sum() * 100) for val in group_data['Outstanding']]
                 })
                 detailed_group_data['Persentase'] = detailed_group_data['Persentase'].apply(lambda x: f"{x:.2f}%")
                 
                 # Add total row
-                total_row = pd.DataFrame({
-                    'Grup': ['Total Pembiayaan'],
-                    'Outstanding': [f"Rp {group_data['Outstanding'].sum()/1_000_000:,.0f} Juta"],
-                    'Persentase': ['100.00%']
-                })
+                total_row_data = {
+                    'Grup': 'Total Pembiayaan',
+                    'Outstanding': f"Rp {group_data['Outstanding'].sum()/1_000_000:,.0f} Juta",
+                    'Persentase': '100.00%'
+                }
                 
                 # Concatenate the original dataframe with the total row
-                detailed_group_data = pd.concat([detailed_group_data, total_row], ignore_index=True)
+                detailed_group_data = pd.concat([
+                    detailed_group_data, 
+                    pd.DataFrame([total_row_data])
+                ], ignore_index=True)
                 
                 st.dataframe(detailed_group_data, hide_index=True, use_container_width=True)
         else:
@@ -623,7 +674,7 @@ def show_lending_tab():
             others_sum = group_data2.iloc[20:]['Outstanding'].sum() if len(group_data2) > 20 else 0
             
             # Create bar chart data including "Others"
-            x_values = [groups_mapping2.get(code, code) for code in group_data_top20['KodeGrup2']] + ['Others']
+            x_values = [groups_mapping2.get(code, f"Group {code}") for code in group_data_top20['KodeGrup2']] + ['Others']
             y_values = list(group_data_top20['Outstanding'] / 1_000_000) + [others_sum / 1_000_000]
 
             text_values = [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data_top20['Outstanding']] + [f"Rp {others_sum/1_000_000:,.0f} Juta"]
@@ -652,22 +703,24 @@ def show_lending_tab():
             # Add detailed table (showing all groups)
             with st.expander("Tampilkan Rincian Data Grup Angsuran"):
                 detailed_group2_data = pd.DataFrame({
-                    'Grup Metode Angsuran': [groups_mapping2.get(code, code) for code in group_data2['KodeGrup2']],
+                    'Grup Metode Angsuran': [groups_mapping2.get(code, f"Group {code}") for code in group_data2['KodeGrup2']],
                     'Outstanding': [f"Rp {val/1_000_000:,.0f} Juta" for val in group_data2['Outstanding']],
                     'Persentase': [(val/group_data2['Outstanding'].sum() * 100) for val in group_data2['Outstanding']]
                 })
                 detailed_group2_data['Persentase'] = detailed_group2_data['Persentase'].apply(lambda x: f"{x:.2f}%")
                 
-
                 # Add total row
-                total_row = pd.DataFrame({
-                    'Grup Metode Angsuran': ['Total Pembiayaan'],
-                    'Outstanding': [f"Rp {group_data2['Outstanding'].sum()/1_000_000:,.0f} Juta"],
-                    'Persentase': ['100.00%']
-                })
+                total_row_data = {
+                    'Grup Metode Angsuran': 'Total Pembiayaan',
+                    'Outstanding': f"Rp {group_data2['Outstanding'].sum()/1_000_000:,.0f} Juta",
+                    'Persentase': '100.00%'
+                }
                 
                 # Concatenate the original dataframe with the total row
-                detailed_group2_data = pd.concat([detailed_group2_data, total_row], ignore_index=True)
+                detailed_group2_data = pd.concat([
+                    detailed_group2_data, 
+                    pd.DataFrame([total_row_data])
+                ], ignore_index=True)
                 
                 st.dataframe(detailed_group2_data, hide_index=True, use_container_width=True)
         else:
@@ -725,21 +778,22 @@ def show_lending_tab():
                 detailed_collector_data = pd.DataFrame({
                     'Kolektor': collector_data['KdKolektor'],
                     'Outstanding': [f"Rp {val/1_000_000:,.0f} Juta" for val in collector_data['Outstanding']],
-
                     'Persentase': [(val/collector_data['Outstanding'].sum() * 100) for val in collector_data['Outstanding']]
                 })
                 detailed_collector_data['Persentase'] = detailed_collector_data['Persentase'].apply(lambda x: f"{x:.2f}%")
                 
                 # Add total row
-                total_row = pd.DataFrame({
-                    'Kolektor': ['Total'],
-                    'Outstanding': [f"Rp {collector_data['Outstanding'].sum()/1_000_000:,.0f} Juta"],
-                    'Persentase': ['100.00%']
-                })
-
+                total_row_data = {
+                    'Kolektor': 'Total',
+                    'Outstanding': f"Rp {collector_data['Outstanding'].sum()/1_000_000:,.0f} Juta",
+                    'Persentase': '100.00%'
+                }
                 
                 # Concatenate the original dataframe with the total row
-                detailed_collector_data = pd.concat([detailed_collector_data, total_row], ignore_index=True)
+                detailed_collector_data = pd.concat([
+                    detailed_collector_data, 
+                    pd.DataFrame([total_row_data])
+                ], ignore_index=True)
                 
                 st.dataframe(detailed_collector_data, hide_index=True, use_container_width=True)
         else:
@@ -845,7 +899,7 @@ def show_lending_tab():
         
         # Add financing products
         for product in selected_financing_products:
-            product_name = f"Pembiayaan - {financing_products.get(product, product)}"
+            product_name = f"Pembiayaan - {financing_products.get(product, f'Product {product}')}"
             value1 = branch1_data['financing_by_product'].get(product, 0) / 1_000_000
             value2 = branch2_data['financing_by_product'].get(product, 0) / 1_000_000
             
@@ -858,7 +912,7 @@ def show_lending_tab():
         
         # Add rahn products
         for product in selected_rahn_products:
-            product_name = f"Rahn - {rahn_products.get(product, product)}"
+            product_name = f"Rahn - {rahn_products.get(product, f'Product {product}')}"
             value1 = branch1_data['rahn_by_product'].get(product, 0) / 1_000_000
             value2 = branch2_data['rahn_by_product'].get(product, 0) / 1_000_000
             

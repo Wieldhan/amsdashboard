@@ -21,4 +21,8 @@ def get_supabase_client(use_service_role=False):
     if not supabase_url or not supabase_key:
         raise ValueError("SUPABASE_URL and SUPABASE_KEY/SUPABASE_SERVICE_ROLE_KEY must be set in .env file")
         
-    return create_client(supabase_url, supabase_key) 
+    return create_client(supabase_url, supabase_key)
+
+def get_admin_client():
+    """Get a Supabase client with service role privileges"""
+    return get_supabase_client(use_service_role=True) 

@@ -5,4 +5,8 @@ primaryColor="#243c82"
 # Additional customization options you might want:
 secondaryBackgroundColor="#f0f2f6"
 textColor="#262730"
-font="sans serif" 
+font="sans serif"
+
+[browser]
+# Rename main page to "Home" in sidebar
+gatherUsageStats = false 

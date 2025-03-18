@@ -337,19 +337,34 @@ ALTER TABLE grup1_mapping ENABLE ROW LEVEL SECURITY;
 ALTER TABLE grup2_mapping ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- Admin users can manage all users
+-- Drop existing policies for users table
+DROP POLICY IF EXISTS "Admin users can manage all users" ON users;
+DROP POLICY IF EXISTS "Users can view their own data" ON users;
+
+-- Create new policies without recursion
 CREATE POLICY "Admin users can manage all users" 
 ON users FOR ALL 
 USING (
-    auth.uid()::text IN (
-        SELECT user_id FROM users WHERE is_admin = true
-    )
+    current_setting('app.is_admin', true)::boolean = true
 );
 
--- Users can view their own data
 CREATE POLICY "Users can view their own data" 
 ON users FOR SELECT 
 USING (auth.uid()::text = user_id);
+
+-- Function to set admin context
+CREATE OR REPLACE FUNCTION set_admin_context() RETURNS void AS $$
+BEGIN
+    PERFORM set_config('app.is_admin', 'true', false);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to clear admin context
+CREATE OR REPLACE FUNCTION clear_admin_context() RETURNS void AS $$
+BEGIN
+    PERFORM set_config('app.is_admin', 'false', false);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- DEPOSITO DATA POLICIES
 -- Admin users can manage all deposito data
