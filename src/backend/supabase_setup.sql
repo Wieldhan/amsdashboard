@@ -315,10 +315,15 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create default admin user if not exists
+-- Note: This is only a placeholder. The actual admin creation should be handled by the application.
+-- The admin password should be set in the environment variables.
 DO $$
 BEGIN
+    -- We're not actually creating the admin user here to avoid hardcoded passwords
+    -- The user should be created from the application using environment variables
     IF NOT EXISTS (SELECT 1 FROM users WHERE user_id = 'admin') THEN
-        PERFORM create_user('admin', 'admin1122', 'all', 'all', TRUE);
+        -- This is just a marker that will be replaced by the application
+        NULL; -- Application will create admin user with proper password
     END IF;
 END
 $$;

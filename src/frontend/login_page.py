@@ -2,10 +2,25 @@ import streamlit as st
 from src.backend.supabase_client import get_supabase_client
 import logging
 import hashlib
+import os
 
 def hash_password(password: str) -> str:
     """Hash password using SHA-256"""
     return hashlib.sha256(password.encode()).hexdigest()
+
+# Function to check for env vars in streamlit secrets as fallback
+def get_env_var(var_name, default=None):
+    # First try OS environment variables (loaded from .env)
+    value = os.environ.get(var_name)
+    
+    # If not found, check Streamlit secrets
+    if not value and "app" in st.secrets:
+        # Convert to lowercase for secrets
+        key = var_name.lower()
+        if key in st.secrets["app"]:
+            value = st.secrets["app"][key]
+    
+    return value or default
 
 def ensure_admin_user():
     """Ensure admin user exists in Database"""
@@ -14,7 +29,13 @@ def ensure_admin_user():
         supabase = get_supabase_client(use_service_role=True)
         
         admin_id = "admin"
-        admin_password = "admin123"  # Default password
+        # Get admin password from environment variable
+        admin_password = get_env_var("ADMIN_DEFAULT_PASSWORD")
+        
+        # If no admin password is set, show error and stop
+        if not admin_password:
+            st.error("ADMIN_DEFAULT_PASSWORD must be set in .env file or Streamlit secrets")
+            st.stop()
         
         try:
             # Check if admin exists in users table
@@ -29,6 +50,7 @@ def ensure_admin_user():
                     'tab_access': 'all'
                 }).execute()
                 logging.info("Admin user created in database")
+                st.warning("Default admin user created. Please change the default password immediately!")
             else:
                 logging.info("Admin user exists in database")
                 
